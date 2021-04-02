@@ -28,21 +28,17 @@ func NewDBConn(driver, dsn string) (*DBConn, error) {
     return dbConn, err
 }
 
-func (dbConn *DBConn) VerifyUser(query, name string) (bool, error) {
-    row, err := dbConn.QueryRow(query, name)
+func (dbConn *DBConn) BaseSearch(query, val string) (string, error) {
+    row, err := dbConn.QueryRow(query, val)
     if err != nil {
         return false, err
     }
 
-    var cnt int
-    err = row.Scan(&cnt)
+    var res string
+    err = row.Scan(&res)
     if err != nil {
-        return false, err
+        return res, err
     }
 
-    if cnt == 1 {
-        return true, nil
-    }
-
-    return false, fmt.Errorf("the count of result from verifing user is %d", cnt)
+    return res, nil
 }
