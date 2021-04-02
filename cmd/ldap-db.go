@@ -1,23 +1,34 @@
 package main
 
 const (
-    SECTION_MAIN                = "main"
-    SECTION_MAIN_KEY_LISTEN     = "listen"
-    SECTION_MAIN_KEY_BINDUSER   = "bind_user"
-    SECTION_MAIN_KEY_BINDPASSWD = "bind_passwd"
-    SECTION_MAIN_KEY_QUERYSTMT  = "query_stmt"
+    SECTION_MAIN                    = "main"
+    SECTION_MAIN_KEY_LISTEN         = "listen"
+    SECTION_MAIN_KEY_BIND_DN        = "bind_dn"
+    SECTION_MAIN_KEY_BIND_PASSWD    = "bind_passwd"
+    SECTION_MAIN_KEY_BASE_DN        = "base_dn"
+    SECTION_MAIN_KEY_BASE_EN        = "base_en"
+    SECTION_MAIN_KEY_BASE_QUERY     = "base_query"
+    SECTION_MAIN_KEY_BASE_CRYPT     = "base_crypt"
+    SECTION_MAIN_KEY_DB_DRIVER      = "db_driver"
+    SECTION_MAIN_KEY_DB_DSN         = "db_dsn"
 )
 
 var (
     // config
     serverListen        string
-    ldapBindUser        string
+    ldapBindDn          string
     ldapBindPasswd      string
-    ldapQueryStmt       string
+    ldapBaseDn          string
+    ldapBaseEn          string
+    ldapBaseQuery       string
+    ldapBaseCrypt       string
+    dbDriver            string
+    dbDsn               string
 
     // runtime
     cfgPath             string
     db                  *db.DBConn
+    lsvr                *server.Server
 )
 
 func init() {
@@ -36,13 +47,43 @@ func init() {
     }
 
     serverListen    := sec.Key(SECTION_MAIN_KEY_LISTEN).String()
-    ldapBindUser    := sec.Key(SECTION_MAIN_KEY_BINDUSER).String()
-    ldapBindPasswd  := sec.Key(SECTION_MAIN_KEY_BINDPASSWD).String()
-    ldapQueryStmt   := sec.Key(SECTION_MAIN_KEY_QUERYSTMT).String()
+    ldapBindDn      := sec.Key(SECTION_MAIN_KEY_BIND_DN).String()
+    ldapBindPasswd  := sec.Key(SECTION_MAIN_KEY_BIND_PASSWD).String()
+    ldapBaseDn      := sec.Key(SECTION_MAIN_KEY_BASE_DN).String()
+    ldapBaseEn      := sec.Key(SECTION_MAIN_KEY_BASE_EN).String()
+    ldapBaseQuery   := sec.Key(SECTION_MAIN_KEY_BASE_QUERY).String()
+    ldapBaseCrypt   := sec.Key(SECTION_MAIN_KEY_BASE_CRYPT).String()
+    dbDriver        := sec.Key(SECTION_MAIN_KEY_DB_DRIVER).String()
+    dbDsn           := sec.Key(SECTION_MAIN_KEY_DB_DSN).String()
 }
 
 func main() {
-    // create a new LDAP server
-    
+    var err error
+    // create db conn to backend source
+    db, err = db.NewDBConn(dbDriver, dbDsn)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // create ldap server
+    lsvr, err = server.NewServer(db, serverListen)
+    if err != nil {
+        log.Fatal(err)
+    }
+    // setting for ldap server
+    err = lsvr.SetBind(ldapBindDn, ldapBindPasswd)
+    if err != nil {
+        log.Fatal(err)
+    }
+    err = lsvr.SetBase(ldapBaseDn, ldapBaseEn, ldapBaseQuery, ldapBaseCrypt)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // running ldap server
+    err = lsvr.ListenAndServe()
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 

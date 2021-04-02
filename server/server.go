@@ -16,6 +16,7 @@ const (
     SEARCH_DN_ENTRY_VAL     = "acidgo"
     SEARCH_BIND_ATTR        = "userPassword"
     QUERY_LABEL             = "Search - LDAP DB"
+    BASE_CRYPT_MD5          = "md5"
 )
 
 type Server struct {
@@ -94,9 +95,24 @@ func (svr *Server) handleBind(w ldap.ResponseWriter, m *ldap.Message) {
 
     res := ldap.NewBindResponse(ldap.LDAPResultSuccess)
     if r.AuthenticationChoice() == "simple" {
-        if string(r.Name()) == svr.bindDn && 
+        if bName == svr.bindDn && bAuth == svr.bindPasswd {
+            w.Write(res)
+            return
+        }
 
-        if string(r.Name()) == "login" || string(r.Name()) == "cn=testing, ou=Users,dc=acidgo,dc=com" {
+        qRes, err := svr.dDB.BaseSearch(svr.baseQuery, bName)
+        var qHash string
+        if err == nil {
+            switch svr.baseCrypt {
+            case BASE_CRYPT_MD5:
+                sum := md5.Sum([byte(qRes)])
+                qHash = hex.EncodeToString(sum[:])
+            default:
+                log.Printf("not support the base crypt method %s", svr.baseCrypt)
+            }
+        }
+
+        if (qHash != "" && qHash == bAuth) || (qHash == "" && qRes == bAuth) {
             w.Write(res)
             return
         }
