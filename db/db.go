@@ -2,7 +2,8 @@ package db
 
 import (
     "database/sql"
-    "log"
+
+    _ "github.com/go-sql-driver/mysql"
 )
 
 type DBConn struct {
@@ -29,13 +30,10 @@ func NewDBConn(driver, dsn string) (*DBConn, error) {
 }
 
 func (dbConn *DBConn) BaseSearch(query, val string) (string, error) {
-    row, err := dbConn.QueryRow(query, val)
-    if err != nil {
-        return false, err
-    }
+    row := dbConn.db.QueryRow(query, val)
 
     var res string
-    err = row.Scan(&res)
+    err := row.Scan(&res)
     if err != nil {
         return res, err
     }

@@ -1,13 +1,14 @@
 package server
 
 import (
-    "flag"
+    "crypto/md5"
+    "encoding/hex"
+    "fmt"
     "log"
-    "os"
-    "os/signal"
-    "syscall"
+    "strings"
 
     "github.com/AcidGo/ldap-db/db"
+    "github.com/lor00x/goldap/message"
     ldap "github.com/vjeantet/ldapserver"
 )
 
@@ -37,7 +38,7 @@ func NewServer(db *db.DBConn, l string) (*Server, error) {
     }
 
     if l == "" {
-        return nil, fmt.Errof("the listen bind is empty")
+        return nil, fmt.Errorf("the listen bind is empty")
     }
 
     lSvr := ldap.NewServer()
@@ -70,7 +71,7 @@ func (svr *Server) handle() (error) {
     routes := ldap.NewRouteMux()
     routes.NotFound(svr.handleNotFound)
     routes.Bind(svr.handleBind)
-    rotues.Search(svr.handleSearch)
+    routes.Search(svr.handleSearch)
 
     svr.lSvr.Handle(routes)
 
@@ -92,30 +93,38 @@ func (svr *Server) handleBind(w ldap.ResponseWriter, m *ldap.Message) {
     bAuth := fmt.Sprintf("%v", r.Authentication())
     log.Printf("bind name: %s", bName)
     log.Printf("bind auth: %s", bAuth)
+    log.Printf("bind auth choice: %s", r.AuthenticationChoice())
 
     res := ldap.NewBindResponse(ldap.LDAPResultSuccess)
     if r.AuthenticationChoice() == "simple" {
-        if bName == svr.bindDn && bAuth == svr.bindPasswd {
-            w.Write(res)
-            return
-        }
-
-        qRes, err := svr.dDB.BaseSearch(svr.baseQuery, bName)
-        var qHash string
-        if err == nil {
-            switch svr.baseCrypt {
-            case BASE_CRYPT_MD5:
-                sum := md5.Sum([byte(qRes)])
-                qHash = hex.EncodeToString(sum[:])
-            default:
-                log.Printf("not support the base crypt method %s", svr.baseCrypt)
+        if bName == svr.bindDn {
+            if bAuth == svr.bindPasswd {
+                w.Write(res)
+                return
             }
         }
 
-        if (qHash != "" && qHash == bAuth) || (qHash == "" && qRes == bAuth) {
+        log.Println("normal user bind request")
+        qRes, err := svr.dDB.BaseSearch(svr.baseQuery, bName)
+        var bHash string
+        if err == nil {
+            switch svr.baseCrypt {
+            case BASE_CRYPT_MD5:
+                sum := md5.Sum([]byte(bAuth))
+                bHash = hex.EncodeToString(sum[:])
+            default:
+                log.Printf("not support the base crypt method %s", svr.baseCrypt)
+            }
+        } else {
+            log.Println("get an error from db base search:", err)
+        }
+        log.Printf("bind res hash is %s, quer res is %s", bHash, qRes)
+
+        if (bHash != "" && bHash == qRes) || (bHash == "" && bAuth == qRes) {
             w.Write(res)
             return
         }
+
         log.Printf("Bind failed User=%s, Pass=%#v", string(r.Name()), r.Authentication())
         res.SetResultCode(ldap.LDAPResultInvalidCredentials)
         res.SetDiagnosticMessage("invalid credentials")
@@ -142,7 +151,7 @@ func (svr *Server) handleNotFound(w ldap.ResponseWriter, r *ldap.Message) {
     }
 }
 
-func handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
+func (svr *Server) handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
     r := m.GetSearchRequest()
     log.Printf("Request BaseDn=%s", r.BaseObject())
     log.Printf("Request Filter=%s", r.Filter())
@@ -159,22 +168,16 @@ func handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
     }
 
     var enVal string
-    for _, attr := range r.Attributes() {
-        if attr.Type_() == svr.baseEn {
-            for _, attrVal := range attr.Vals() {
-                if attrVal != "" {
-                    enVal = attrVal
-                    break
-                }
-            }
-        }
-        if enVal != "" {
-            break
+    tmpS := strings.Split(strings.Trim(r.FilterString(), "()"), "=")
+    if len(tmpS) == 2 {
+        if tmpS[0] == svr.baseEn {
+            enVal = tmpS[1]
         }
     }
+    log.Printf("enVal is %s", enVal)
 
     e := ldap.NewSearchResultEntry(enVal)
-    e.AddAttribute(svr.baseEn, "MOCK")
+    e.AddAttribute(message.AttributeDescription(svr.baseEn), "MOCK")
     e.AddAttribute(SEARCH_DN_ENTRY_ATTR, SEARCH_DN_ENTRY_VAL)
     w.Write(e)
 
