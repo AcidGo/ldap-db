@@ -4,10 +4,10 @@ import (
     "crypto/md5"
     "encoding/hex"
     "fmt"
-    "log"
     "strings"
 
     "github.com/AcidGo/ldap-db/db"
+    "github.com/AcidGo/ldap-db/logger"
     "github.com/lor00x/goldap/message"
     ldap "github.com/vjeantet/ldapserver"
 )
@@ -19,6 +19,12 @@ const (
     QUERY_LABEL             = "Search - LDAP DB"
     BASE_CRYPT_MD5          = "md5"
 )
+
+var logging *logger.ContextLogger
+
+func init() {
+    logging = logger.FitContext("server")
+}
 
 type Server struct {
     lSvr        *ldap.Server
@@ -91,9 +97,9 @@ func (svr *Server) handleBind(w ldap.ResponseWriter, m *ldap.Message) {
     r := m.GetBindRequest()
     bName := string(r.Name())
     bAuth := fmt.Sprintf("%v", r.Authentication())
-    log.Printf("bind name: %s", bName)
-    log.Printf("bind auth: %s", bAuth)
-    log.Printf("bind auth choice: %s", r.AuthenticationChoice())
+    logging.Infof("bind name: %s", bName)
+    logging.Infof("bind auth: %s", bAuth)
+    logging.Infof("bind auth choice: %s", r.AuthenticationChoice())
 
     res := ldap.NewBindResponse(ldap.LDAPResultSuccess)
     if r.AuthenticationChoice() == "simple" {
@@ -104,7 +110,7 @@ func (svr *Server) handleBind(w ldap.ResponseWriter, m *ldap.Message) {
             }
         }
 
-        log.Println("normal user bind request")
+        logging.Debug("normal user bind request")
         qRes, err := svr.dDB.BaseSearch(svr.baseQuery, bName)
         var bHash string
         if err == nil {
@@ -113,19 +119,19 @@ func (svr *Server) handleBind(w ldap.ResponseWriter, m *ldap.Message) {
                 sum := md5.Sum([]byte(bAuth))
                 bHash = hex.EncodeToString(sum[:])
             default:
-                log.Printf("not support the base crypt method %s", svr.baseCrypt)
+                logging.Errorf("not support the base crypt method %s", svr.baseCrypt)
             }
         } else {
-            log.Println("get an error from db base search:", err)
+            logging.Error("get an error from db base search: ", err)
         }
-        log.Printf("bind res hash is %s, quer res is %s", bHash, qRes)
+        logging.Infof("bind res hash is %s, quer res is %s", bHash, qRes)
 
         if (bHash != "" && bHash == qRes) || (bHash == "" && bAuth == qRes) {
             w.Write(res)
             return
         }
 
-        log.Printf("Bind failed User=%s, Pass=%#v", string(r.Name()), r.Authentication())
+        logging.Errorf("Bind failed User=%s, Pass=%+v", string(r.Name()), r.Authentication())
         res.SetResultCode(ldap.LDAPResultInvalidCredentials)
         res.SetDiagnosticMessage("invalid credentials")
     } else {
@@ -153,16 +159,16 @@ func (svr *Server) handleNotFound(w ldap.ResponseWriter, r *ldap.Message) {
 
 func (svr *Server) handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
     r := m.GetSearchRequest()
-    log.Printf("Request BaseDn=%s", r.BaseObject())
-    log.Printf("Request Filter=%s", r.Filter())
-    log.Printf("Request FilterString=%s", r.FilterString())
-    log.Printf("Request Attributes=%s", r.Attributes())
-    log.Printf("Request TimeLimit=%d", r.TimeLimit().Int())
+    logging.Debugf("Request BaseDn=%s", r.BaseObject())
+    logging.Debugf("Request Filter=%s", r.Filter())
+    logging.Debugf("Request FilterString=%s", r.FilterString())
+    logging.Debugf("Request Attributes=%s", r.Attributes())
+    logging.Debugf("Request TimeLimit=%d", r.TimeLimit().Int())
 
     // Handle Stop Signal (server stop / client disconnected / Abandoned request....)
     select {
     case <-m.Done:
-        log.Print("Leaving handleSearch...")
+        logging.Info("Leaving handleSearch...")
         return
     default:
     }
@@ -174,7 +180,7 @@ func (svr *Server) handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
             enVal = tmpS[1]
         }
     }
-    log.Printf("enVal is %s", enVal)
+    logging.Debugf("enVal is %s", enVal)
 
     e := ldap.NewSearchResultEntry(enVal)
     e.AddAttribute(message.AttributeDescription(svr.baseEn), "MOCK")

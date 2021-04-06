@@ -8,3 +8,7 @@ base_query = 'select passwd from tb4 where sn = ?'
 base_crypt = 'md5'
 db_driver = 'mysql'
 db_dsn = 'golang:password@tcp(192.168.66.31:3307)/testdb2'
+log_dir = '/tmp/'
+log_name = 'abc.log'
+log_level = 'debug'
+log_report = 1

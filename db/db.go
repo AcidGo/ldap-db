@@ -4,7 +4,14 @@ import (
     "database/sql"
 
     _ "github.com/go-sql-driver/mysql"
+    "github.com/AcidGo/ldap-db/logger"
 )
+
+var logging *logger.ContextLogger
+
+func init() {
+    logging = logger.FitContext("database")
+}
 
 type DBConn struct {
     driver  string
