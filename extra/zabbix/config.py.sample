@@ -1,0 +1,10 @@
+db_host = "192.168.66.31"
+db_port = 3307
+db_user = "golang"
+db_passwd = "suan"
+db_db = "testdb4"
+db_charset = "utf8"
+db_sql = "select alias, name, passwd, surname from test_user;"
+zbx_url = "http://192.168.66.50"
+zbx_user = "Admin"
+zbx_passwd = "zabbix"
