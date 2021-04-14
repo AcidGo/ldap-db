@@ -51,10 +51,16 @@ class ZBXAPI(object):
         )
 
 class MySQLDB(object):
-    def __init__(self, host, port, user, passwd, db, charset):
+    def __init__(self, host, port, user, passwd, db, charset="utf8"):
         self.db = pymysql.connect(
-
+            host = host,
+            port = port,
+            user = user,
+            password = passwd,
+            database = db,
+            charset = charset,
         )
+        self.db.ping()
 
     def select_dict(self, query):
         res = {}
@@ -63,14 +69,11 @@ class MySQLDB(object):
             res = cursor.fetchall()
         return res
 
-class ZabbixUserSyncMySQL(object):
-    def
-
-    def __init__(self, zbx_api, mysql_db):
+class ZabbixUserSync(object):
+    def __init__(self, zbx_api):
         self.zapi = zbx_api
-        self.mydb = mysql_db
 
-        if self.zapi is None or self.mydb is None:
+        if self.zapi is None:
             raise Exception("the self items is nil")
 
     def compare(db_users, zbx_users):
@@ -86,4 +89,35 @@ class ZabbixUserSyncMySQL(object):
                     continue
                 self.zapi.update_user(i["alias"], i.get("name", ""), i.get("surname", ""))
             else:
-                self.zapi.create_user(i["alias"], i.get("passwd", ""), )
+                self.zapi.create_user(i["alias"], i.get("passwd", ""), i.get("surname", ""))
+
+if __name__ == "__main__":
+    # TODO(20210401-AcidGo): get config from file
+    db_host = ""
+    db_port = 3306
+    db_user = ""
+    db_passwd = ""
+    db_db = ""
+    db_charset = ""
+    db_sql = ""
+    zbx_url = ""
+    zbx_user = ""
+    zbx_passwd = ""
+
+    zbx_api = ZBXAPI(zbx_url)
+    zbx_api.login(zbx_user, zbx_passwd)
+
+    db_conn = MySQLDB(
+        host = db_host,
+        port = db_port,
+        user = db_user,
+        passwd = db_passwd,
+        db = db_db,
+        charset = db_charset,
+    )
+
+    zbx_user_sync = ZabbixUserSync(zbx_api)
+
+    db_users = db_conn.select_dict(db_sql)
+    zbx_users = zbx_api.get_all_user()
+    zbx_user_sync.compare(db_users, zbx_users)
